@@ -22,6 +22,12 @@ func TestExtractVideoID(t *testing.T) {
 			want: "987654321",
 		},
 		{
+			// vimeo also supports channel/video paths like /channels/foo/123
+			name: "channel url",
+			url:  "https://vimeo.com/channels/staffpicks/112233445",
+			want: "112233445",
+		},
+		{
 			name:    "invalid url",
 			url:     "https://example.com/watch?v=abc",
 			wantErr: true,
