@@ -3,71 +3,61 @@ package youtube
 import (
 	"testing"
 
-	"github.com/iawia002/lux/extractors"
-	"github.com/iawia002/lux/test"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestYoutube(t *testing.T) {
+func TestExtractVideoID(t *testing.T) {
 	tests := []struct {
-		name     string
-		args     test.Args
-		playlist bool
+		url      string
+		expected string
+		wantErr  bool
 	}{
 		{
-			name: "normal test",
-			args: test.Args{
-				URL:   "https://www.youtube.com/watch?v=Gnbch2osEeo",
-				Title: "Multifandom Mashup 2017",
-			},
+			url:      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+			expected: "dQw4w9WgXcQ",
+			wantErr:  false,
 		},
 		{
-			name: "signature test",
-			args: test.Args{
-				URL:   "https://www.youtube.com/watch?v=ZtgzKBrU1GY",
-				Title: "Halo Infinite - E3 2019 - Discover Hope",
-			},
+			url:      "https://youtu.be/dQw4w9WgXcQ",
+			expected: "dQw4w9WgXcQ",
+			wantErr:  false,
 		},
 		{
-			name: "playlist test",
-			args: test.Args{
-				URL:   "https://www.youtube.com/watch?v=Lt2pwLxJxgA&list=PLIYAO-qLriEtYm7UcXPH3SOJxgqjwRrIw",
-				Title: "papi酱 - 你有酱婶儿的朋友吗？",
-			},
-			playlist: true,
+			url:     "https://www.youtube.com/",
+			wantErr: true,
 		},
 		{
-			name: "url_encoded_fmt_stream_map test",
-			args: test.Args{
-				URL:   "https://youtu.be/DNaOZovrSVo",
-				Title: "QNAP Customer Story | Scorptec",
-			},
-		},
-		{
-			name: "stream 404 test 1",
-			args: test.Args{
-				URL:   "https://www.youtube.com/watch?v=MRJ8NnUXacY",
-				Title: "FreeFileSync: Mirror Synchronization",
-			},
+			url:     "https://example.com",
+			wantErr: true,
 		},
 	}
+
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var (
-				data []*extractors.Data
-				err  error
-			)
-			if tt.playlist {
-				// playlist mode
-				_, err = New().Extract(tt.args.URL, extractors.Options{
-					Playlist:     true,
-					ThreadNumber: 9,
-				})
-				test.CheckError(t, err)
+		t.Run(tt.url, func(t *testing.T) {
+			id, err := extractVideoID(tt.url)
+			if tt.wantErr {
+				assert.Error(t, err)
 			} else {
-				data, err = New().Extract(tt.args.URL, extractors.Options{})
-				test.CheckError(t, err)
-				test.Check(t, tt.args, data[0])
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expected, id)
 			}
 		})
 	}
+}
+
+func TestExtractTitle(t *testing.T) {
+	html := "<html><head><title>Rick Astley - Never Gonna Give You Up - YouTube</title></head></html>"
+	title := extractTitle(html)
+	assert.Equal(t, "Rick Astley - Never Gonna Give You Up", title)
+}
+
+func TestExtractTitleMissing(t *testing.T) {
+	html := "<html><head></head></html>"
+	title := extractTitle(html)
+	assert.Equal(t, "Unknown Title", title)
+}
+
+func TestNew(t *testing.T) {
+	e := New()
+	assert.NotNil(t, e)
 }

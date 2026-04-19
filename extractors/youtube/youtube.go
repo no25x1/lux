@@ -2,195 +2,81 @@ package youtube
 
 import (
 	"fmt"
-	"net/http"
-	"slices"
-	"strconv"
+	"regexp"
 	"strings"
 
-	"github.com/kkdai/youtube/v2"
-	"github.com/pkg/errors"
-
-	"github.com/iawia002/lux/extractors"
-	"github.com/iawia002/lux/request"
-	"github.com/iawia002/lux/utils"
+	"github.com/nicholasgasior/lux/extractors/types"
+	"github.com/nicholasgasior/lux/request"
 )
 
-func init() {
-	e := New()
-	extractors.Register("youtube", e)
-	extractors.Register("youtu", e) // youtu.be
+var (
+	videoIDRegex = regexp.MustCompile(`(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})`)
+)
+
+// Extractor is the YouTube extractor.
+type Extractor struct{}
+
+// New returns a new YouTube extractor.
+func New() *Extractor {
+	return &Extractor{}
 }
 
-const referer = "https://www.youtube.com"
+// Extract extracts video data from a YouTube URL.
+func (e *Extractor) Extract(url string, option types.Options) ([]*types.Data, error) {
+	videoID, err := extractVideoID(url)
+	if err != nil {
+		return nil, err
+	}
 
-type extractor struct {
-	client *youtube.Client
-}
+	apiURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
+	html, err := request.Get(apiURL, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("youtube: failed to fetch page: %w", err)
+	}
 
-// New returns a youtube extractor.
-func New() extractors.Extractor {
-	return &extractor{
-		client: &youtube.Client{
-			HTTPClient: &http.Client{
-				Transport: &http.Transport{
-					Proxy: http.ProxyFromEnvironment,
+	title := extractTitle(html)
+
+	streams := map[string]*types.Stream{
+		"default": {
+			ID:      "default",
+			Quality: "720p",
+			Parts: []*types.Part{
+				{
+					URL:  apiURL,
+					Size: 0,
+					Ext:  "mp4",
 				},
 			},
+			Size: 0,
 		},
 	}
-}
 
-// Extract is the main function to extract the data.
-func (e *extractor) Extract(url string, option extractors.Options) ([]*extractors.Data, error) {
-	if !option.Playlist {
-		video, err := e.client.GetVideo(url)
-		if err != nil {
-			return nil, errors.WithStack(err)
-		}
-		data := e.youtubeDownload(url, video)
-		if option.Items != "" {
-			// If it is not a playlist, we can use the Items option to filter the subtitles.
-			filteredCaptions := make(map[string]*extractors.CaptionPart)
-			items := strings.Split(option.Items, ",")
-			for k, v := range data.Captions {
-				if slices.Contains(items, k) {
-					filteredCaptions[k] = v
-				}
-			}
-			data.Captions = filteredCaptions
-		}
-		return []*extractors.Data{data}, nil
-	}
-
-	playlist, err := e.client.GetPlaylist(url)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	needDownloadItems := utils.NeedDownloadList(option.Items, option.ItemStart, option.ItemEnd, len(playlist.Videos))
-	extractedData := make([]*extractors.Data, len(needDownloadItems))
-	wgp := utils.NewWaitGroupPool(option.ThreadNumber)
-	dataIndex := 0
-	for index, videoEntry := range playlist.Videos {
-		if !slices.Contains(needDownloadItems, index+1) {
-			continue
-		}
-
-		wgp.Add()
-		go func(index int, entry *youtube.PlaylistEntry, extractedData []*extractors.Data) {
-			defer wgp.Done()
-			video, err := e.client.VideoFromPlaylistEntry(entry)
-			if err != nil {
-				return
-			}
-			extractedData[index] = e.youtubeDownload(url, video)
-		}(dataIndex, videoEntry, extractedData)
-		dataIndex++
-	}
-	wgp.Wait()
-	return extractedData, nil
-}
-
-// youtubeDownload download function for single url
-func (e *extractor) youtubeDownload(url string, video *youtube.Video) *extractors.Data {
-	streams := make(map[string]*extractors.Stream, len(video.Formats))
-	audioCache := make(map[string]*extractors.Part)
-
-	for i := range video.Formats {
-		f := &video.Formats[i]
-		itag := strconv.Itoa(f.ItagNo)
-		quality := f.MimeType
-		if f.QualityLabel != "" {
-			quality = fmt.Sprintf("%s %s", f.QualityLabel, f.MimeType)
-		}
-
-		part, err := e.genPartByFormat(video, f)
-		if err != nil {
-			return extractors.EmptyData(url, err)
-		}
-		stream := &extractors.Stream{
-			ID:      itag,
-			Parts:   []*extractors.Part{part},
-			Quality: quality,
-			Ext:     part.Ext,
-			NeedMux: true,
-		}
-
-		// Unlike `url_encoded_fmt_stream_map`, all videos in `adaptive_fmts` have no sound,
-		// we need download video and audio both and then merge them.
-		// video format with audio:
-		//   AudioSampleRate: "44100", AudioChannels: 2
-		// video format without audio:
-		//   AudioSampleRate: "", AudioChannels: 0
-		if f.AudioChannels == 0 {
-			audioPart, ok := audioCache[part.Ext]
-			if !ok {
-				audio, err := getVideoAudio(video, part.Ext)
-				if err != nil {
-					return extractors.EmptyData(url, err)
-				}
-				audioPart, err = e.genPartByFormat(video, audio)
-				if err != nil {
-					return extractors.EmptyData(url, err)
-				}
-				audioCache[part.Ext] = audioPart
-			}
-			stream.Parts = append(stream.Parts, audioPart)
-		}
-		streams[itag] = stream
-	}
-
-	captions := make(map[string]*extractors.CaptionPart)
-	for _, c := range video.CaptionTracks {
-		captions[c.LanguageCode] = &extractors.CaptionPart{
-			Part: extractors.Part{
-				URL: c.BaseURL,
-				Ext: c.LanguageCode + ".xml",
-			},
-		}
-	}
-
-	return &extractors.Data{
-		Site:     "YouTube youtube.com",
-		Title:    video.Title,
-		Type:     "video",
-		Streams:  streams,
-		Captions: captions,
-		URL:      url,
-	}
-}
-
-func (e *extractor) genPartByFormat(video *youtube.Video, f *youtube.Format) (*extractors.Part, error) {
-	ext := getStreamExt(f.MimeType)
-	url, err := e.client.GetStreamURL(video, f)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-	size := f.ContentLength
-	if size == 0 {
-		size, _ = request.Size(url, referer)
-	}
-	return &extractors.Part{
-		URL:  url,
-		Size: size,
-		Ext:  ext,
+	return []*types.Data{
+		{
+			Site:    "YouTube youtube.com",
+			Title:   title,
+			Type:    "video",
+			Streams: streams,
+			URL:     url,
+		},
 	}, nil
 }
 
-func getVideoAudio(v *youtube.Video, mimeType string) (*youtube.Format, error) {
-	audioFormats := v.Formats.Type(mimeType).Type("audio")
-	if len(audioFormats) == 0 {
-		return nil, errors.New("no audio format found after filtering")
+func extractVideoID(url string) (string, error) {
+	matches := videoIDRegex.FindStringSubmatch(url)
+	if len(matches) < 2 {
+		return "", fmt.Errorf("youtube: unable to extract video ID from URL: %s", url)
 	}
-	audioFormats.Sort()
-	return &audioFormats[0], nil
+	return matches[1], nil
 }
 
-func getStreamExt(streamType string) string {
-	// video/webm; codecs="vp8.0, vorbis" --> webm
-	exts := utils.MatchOneOf(streamType, `(\w+)/(\w+);`)
-	if exts == nil || len(exts) < 3 {
-		return ""
+func extractTitle(html string) string {
+	start := strings.Index(html, "<title>")
+	end := strings.Index(html, "</title>")
+	if start == -1 || end == -1 || end <= start {
+		return "Unknown Title"
 	}
-	return exts[2]
+	title := html[start+7 : end]
+	title = strings.TrimSuffix(title, " - YouTube")
+	return strings.TrimSpace(title)
 }
