@@ -18,8 +18,8 @@ const (
 
 	// defaultQuality sets the default video quality requested from the player API.
 	// Common values: 116=1080p60, 80=1080p, 64=720p, 32=480p, 16=360p
-	// Using 116 to prefer highest quality by default.
-	defaultQuality = 116
+	// Lowered to 80 (1080p) since 1080p60 often requires premium membership.
+	defaultQuality = 80
 )
 
 type bilibiliData struct {
