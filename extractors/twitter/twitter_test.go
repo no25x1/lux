@@ -3,44 +3,60 @@ package twitter
 import (
 	"testing"
 
-	"github.com/iawia002/lux/extractors"
-	"github.com/iawia002/lux/test"
+	"github.com/nicholasgasior/lux/extractors/types"
 )
 
-func TestDownload(t *testing.T) {
-	tests := []struct {
-		name string
-		args test.Args
+func TestExtractTweetID(t *testing.T) {
+	cases := []struct {
+		url      string
+		wantID   string
+		wantErr  bool
 	}{
-		{
-			name: "normal test",
-			args: test.Args{
-				URL:     "https://twitter.com/justinbieber/status/898217160060698624",
-				Title:   "Justin Bieber on Twitter 898217160060698624",
-				Quality: "720x1280",
-			},
-		},
-		{
-			name: "abnormal uri test1",
-			args: test.Args{
-				URL:     "https://twitter.com/twitter/statuses/898567934192177153",
-				Title:   "Justin Bieber on Twitter 898567934192177153",
-				Quality: "1280x720",
-			},
-		},
-		{
-			name: "abnormal uri test2",
-			args: test.Args{
-				URL:     "https://twitter.com/kyoudera/status/971819131711373312/video/1/",
-				Title:   "ネメシス 京寺 on Twitter 971819131711373312",
-				Quality: "1280x720",
-			},
-		},
+		{"https://twitter.com/user/status/1234567890", "1234567890", false},
+		{"https://x.com/user/status/9876543210", "9876543210", false},
+		{"https://twitter.com/user/status/111?s=20", "111", false},
+		{"https://example.com/not-a-tweet", "", true},
+		{"", "", true},
 	}
-	// The file size changes every time (caused by CDN?), so the size is not checked here
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			New().Extract(tt.args.URL, extractors.Options{})
-		})
+
+	for _, tc := range cases {
+		got, err := extractTweetID(tc.url)
+		if tc.wantErr {
+			if err == nil {
+				t.Errorf("extractTweetID(%q) expected error, got nil", tc.url)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("extractTweetID(%q) unexpected error: %v", tc.url, err)
+			continue
+		}
+		if got != tc.wantID {
+			t.Errorf("extractTweetID(%q) = %q, want %q", tc.url, got, tc.wantID)
+		}
+	}
+}
+
+func TestNew(t *testing.T) {
+	e := New()
+	if e == nil {
+		t.Fatal("New() returned nil")
+	}
+}
+
+func TestExtract(t *testing.T) {
+	e := New()
+	data, err := e.Extract("https://twitter.com/user/status/1234567890", types.Options{})
+	if err != nil {
+		t.Fatalf("Extract() unexpected error: %v", err)
+	}
+	if len(data) == 0 {
+		t.Fatal("Extract() returned no data")
+	}
+	if data[0].Site != "Twitter" {
+		t.Errorf("Site = %q, want \"Twitter\"", data[0].Site)
+	}
+	if _, ok := data[0].Streams["default"]; !ok {
+		t.Error("expected 'default' stream to be present")
 	}
 }
