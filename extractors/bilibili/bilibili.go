@@ -13,8 +13,13 @@ import (
 )
 
 const (
-	bilibiliAPIURL = "https://api.bilibili.com/x/web-interface/view?bvid=%s"
+	bilibiliAPIURL    = "https://api.bilibili.com/x/web-interface/view?bvid=%s"
 	bilibiliPlayerURL = "https://api.bilibili.com/x/player/playurl?bvid=%s&cid=%d&qn=%d&fnval=16"
+
+	// defaultQuality sets the default video quality requested from the player API.
+	// Common values: 116=1080p60, 80=1080p, 64=720p, 32=480p, 16=360p
+	// Using 116 to prefer highest quality by default.
+	defaultQuality = 116
 )
 
 type bilibiliData struct {
@@ -69,7 +74,7 @@ func (e *Extractor) Extract(url string, option types.Options) ([]*types.Data, er
 		return nil, fmt.Errorf("bilibili API error code: %d", data.Code)
 	}
 
-	playerURL := fmt.Sprintf(bilibiliPlayerURL, bvid, data.Data.CID, 80)
+	playerURL := fmt.Sprintf(bilibiliPlayerURL, bvid, data.Data.CID, defaultQuality)
 	presp, err := request.Get(playerURL, url, nil)
 	if err != nil {
 		return nil, err
