@@ -26,6 +26,8 @@ func (e *extractor) Extract(url string, option types.Options) ([]*types.Data, er
 	// In a real implementation this would call the Twitter/X API or
 	// use a guest-token flow to retrieve the media URL.
 	// Here we return a minimal stub so the extractor is wired up correctly.
+	// NOTE: video.twimg.com URLs require a valid auth token in practice;
+	// this stub is useful for testing the wiring but won't download real media.
 	data := &types.Data{
 		Site:  "Twitter",
 		Title: fmt.Sprintf("tweet_%s", videoID),
@@ -48,6 +50,7 @@ func (e *extractor) Extract(url string, option types.Options) ([]*types.Data, er
 }
 
 // extractTweetID parses the numeric tweet/status ID from a Twitter or X URL.
+// Both twitter.com and x.com domains are supported.
 func extractTweetID(url string) (string, error) {
 	url = strings.TrimSpace(url)
 	matches := tweetURLPattern.FindStringSubmatch(url)
