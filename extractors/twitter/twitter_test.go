@@ -17,6 +17,8 @@ func TestExtractTweetID(t *testing.T) {
 		{"https://twitter.com/user/status/111?s=20", "111", false},
 		{"https://example.com/not-a-tweet", "", true},
 		{"", "", true},
+		// Edge case: URL with trailing slash should still fail gracefully
+		{"https://twitter.com/user/status/", "", true},
 	}
 
 	for _, tc := range cases {
