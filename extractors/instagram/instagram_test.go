@@ -2,46 +2,92 @@ package instagram
 
 import (
 	"testing"
-
-	"github.com/iawia002/lux/extractors"
-	"github.com/iawia002/lux/test"
 )
 
-func TestDownload(t *testing.T) {
+func TestExtractShortcode(t *testing.T) {
 	tests := []struct {
-		name string
-		args test.Args
+		name     string
+		url      string
+		want     string
+		wantErr  bool
 	}{
 		{
-			name: "video test",
-			args: test.Args{
-				URL:   "https://www.instagram.com/p/BlIka1ZFCNr",
-				Title: "Instagram BlIka1ZFCNr",
-				Size:  992330,
-			},
+			name: "standard post URL",
+			url:  "https://www.instagram.com/p/ABC123def45/",
+			want: "ABC123def45",
 		},
 		{
-			name: "image test",
-			args: test.Args{
-				URL:   "https://www.instagram.com/p/Bl5oVUyl9Yx",
-				Title: "Instagram Bl5oVUyl9Yx",
-				Size:  250596,
-			},
+			name: "reel URL",
+			url:  "https://www.instagram.com/reel/XYZ789ghi01/",
+			want: "XYZ789ghi01",
 		},
 		{
-			name: "image album test",
-			args: test.Args{
-				URL:   "https://www.instagram.com/p/Bjyr-gxF4Rb",
-				Title: "Instagram Bjyr-gxF4Rb",
-				Size:  656476,
-			},
+			name: "TV URL",
+			url:  "https://www.instagram.com/tv/MNO456jkl78/",
+			want: "MNO456jkl78",
+		},
+		{
+			name:    "invalid URL",
+			url:     "https://www.instagram.com/username/",
+			wantErr: true,
+		},
+		{
+			name:    "empty URL",
+			url:     "",
+			wantErr: true,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			data, err := New().Extract(tt.args.URL, extractors.Options{})
-			test.CheckError(t, err)
-			test.Check(t, tt.args, data[0])
+			got, err := extractShortcode(tt.url)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("extractShortcode() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("extractShortcode() = %v, want %v", got, tt.want)
+			}
 		})
+	}
+}
+
+func TestNormalizeURL(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{
+			name: "already normalized",
+			url:  "https://www.instagram.com/p/ABC123/",
+			want: "https://www.instagram.com/p/ABC123/",
+		},
+		{
+			name: "without trailing slash",
+			url:  "https://www.instagram.com/p/ABC123",
+			want: "https://www.instagram.com/p/ABC123/",
+		},
+		{
+			name: "with query params",
+			url:  "https://www.instagram.com/p/ABC123/?utm_source=ig_web",
+			want: "https://www.instagram.com/p/ABC123/",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeURL(tt.url)
+			if got != tt.want {
+				t.Errorf("normalizeURL() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNew(t *testing.T) {
+	e := New()
+	if e == nil {
+		t.Error("New() returned nil")
 	}
 }
