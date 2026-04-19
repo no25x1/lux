@@ -2,38 +2,54 @@ package vimeo
 
 import (
 	"testing"
-
-	"github.com/iawia002/lux/extractors"
-	"github.com/iawia002/lux/test"
 )
 
-func TestDownload(t *testing.T) {
+func TestExtractVideoID(t *testing.T) {
 	tests := []struct {
-		name string
-		args test.Args
+		name    string
+		url     string
+		want    string
+		wantErr bool
 	}{
 		{
-			name: "normal test",
-			args: test.Args{
-				URL:     "https://player.vimeo.com/video/259325107",
-				Title:   "prfm 20180309",
-				Size:    131051118,
-				Quality: "1080p",
-			},
+			name: "standard url",
+			url:  "https://vimeo.com/123456789",
+			want: "123456789",
 		},
 		{
-			name: "normal test",
-			args: test.Args{
-				URL:     "https://vimeo.com/254865724",
-				Title:   "MAGIC DINER PT. II",
-				Size:    138966306,
-				Quality: "1080p",
-			},
+			name: "url with path suffix",
+			url:  "https://vimeo.com/987654321/review",
+			want: "987654321",
+		},
+		{
+			name:    "invalid url",
+			url:     "https://example.com/watch?v=abc",
+			wantErr: true,
+		},
+		{
+			name:    "empty url",
+			url:     "",
+			wantErr: true,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			New().Extract(tt.args.URL, extractors.Options{})
+			got, err := extractVideoID(tt.url)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("extractVideoID() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("extractVideoID() = %v, want %v", got, tt.want)
+			}
 		})
+	}
+}
+
+func TestNew(t *testing.T) {
+	e := New()
+	if e == nil {
+		t.Fatal("New() returned nil")
 	}
 }

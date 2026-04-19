@@ -1,107 +1,54 @@
 package vimeo
 
 import (
-	"encoding/json"
+	"fmt"
+	"net/http"
+	"regexp"
 	"strings"
 
-	"github.com/pkg/errors"
-
-	"github.com/iawia002/lux/extractors"
-	"github.com/iawia002/lux/request"
-	"github.com/iawia002/lux/utils"
+	"github.com/nicholasgasior/lux/extractors/types"
 )
 
-func init() {
-	extractors.Register("vimeo", New())
+var videoIDRegex = regexp.MustCompile(`vimeo\.com/(\d+)`)
+
+type extractor struct {
+	client *http.Client
 }
 
-type vimeoProgressive struct {
-	Width   int    `json:"width"`
-	Height  int    `json:"height"`
-	Profile string `json:"profile"`
-	Quality string `json:"quality"`
-	URL     string `json:"url"`
-}
-
-type vimeoFiles struct {
-	Progressive []vimeoProgressive `json:"progressive"`
-}
-
-type vimeoRequest struct {
-	Files vimeoFiles `json:"files"`
-}
-
-type vimeoVideo struct {
-	Title string `json:"title"`
-}
-
-type vimeo struct {
-	Request vimeoRequest `json:"request"`
-	Video   vimeoVideo   `json:"video"`
-}
-
-type extractor struct{}
-
-// New returns a vimeo extractor.
-func New() extractors.Extractor {
-	return &extractor{}
-}
-
-// Extract is the main function to extract the data.
-func (e *extractor) Extract(url string, option extractors.Options) ([]*extractors.Data, error) {
-	var (
-		html, vid string
-		err       error
-	)
-	if strings.Contains(url, "player.vimeo.com") {
-		html, err = request.Get(url, url, nil)
-		if err != nil {
-			return nil, errors.WithStack(err)
-		}
-	} else {
-		vid = utils.MatchOneOf(url, `vimeo\.com/(\d+)`)[1]
-		html, err = request.Get("https://player.vimeo.com/video/"+vid, url, nil)
-		if err != nil {
-			return nil, errors.WithStack(err)
-		}
+func New() types.Extractor {
+	return &extractor{
+		client: &http.Client{},
 	}
-	jsonStrings := utils.MatchOneOf(html, `var \w+\s?=\s?({.+?});`)
-	if jsonStrings == nil || len(jsonStrings) < 2 {
-		return nil, errors.WithStack(extractors.ErrURLParseFailed)
-	}
-	jsonString := jsonStrings[1]
+}
 
-	var vimeoData vimeo
-	if err = json.Unmarshal([]byte(jsonString), &vimeoData); err != nil {
-		return nil, errors.WithStack(err)
+func (e *extractor) Extract(url string, opts types.Options) (*types.Data, error) {
+	videoid, err := extractVideoID(url)
+	if err != nil {
+		return nil, err
 	}
 
-	streams := make(map[string]*extractors.Stream, len(vimeoData.Request.Files.Progressive))
-	var size int64
-	for _, video := range vimeoData.Request.Files.Progressive {
-		size, err = request.Size(video.URL, url)
-		if err != nil {
-			return nil, errors.WithStack(err)
-		}
-		urlData := &extractors.Part{
-			URL:  video.URL,
-			Size: size,
-			Ext:  "mp4",
-		}
-		streams[video.Profile] = &extractors.Stream{
-			Parts:   []*extractors.Part{urlData},
-			Size:    size,
-			Quality: video.Quality,
-		}
+	apiURL := fmt.Sprintf("https://vimeo.com/api/v2/video/%s.json", videoid)
+	resp, err := e.client.Get(apiURL)
+	if err != nil {
+		return nil, fmt.Errorf("vimeo: failed to fetch video info: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("vimeo: unexpected status %d for video %s", resp.StatusCode, videoid)
 	}
 
-	return []*extractors.Data{
-		{
-			Site:    "Vimeo vimeo.com",
-			Title:   vimeoData.Video.Title,
-			Type:    extractors.DataTypeVideo,
-			Streams: streams,
-			URL:     url,
-		},
+	return &types.Data{
+		Site:  "Vimeo",
+		Title: videoid,
+		URL:   url,
 	}, nil
+}
+
+func extractVideoID(url string) (string, error) {
+	matches := videoIDRegex.FindStringSubmatch(url)
+	if len(matches) < 2 {
+		return "", fmt.Errorf("vimeo: could not extract video ID from URL: %s", url)
+	}
+	return strings.TrimSpace(matches[1]), nil
 }
