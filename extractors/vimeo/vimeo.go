@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/nicholasgasior/lux/extractors/types"
 )
@@ -17,7 +18,10 @@ type extractor struct {
 
 func New() types.Extractor {
 	return &extractor{
-		client: &http.Client{},
+		// Use a timeout to avoid hanging indefinitely on slow connections
+		client: &http.Client{
+			Timeout: 15 * time.Second,
+		},
 	}
 }
 
