@@ -32,6 +32,9 @@ func (e *extractor) Extract(url string, option types.Options) ([]*types.Data, er
 	// TODO(nicholasgasior): Look into using the syndication API endpoint
 	// (cdn.syndication.twimg.com/tweet-result?id=<id>) as a no-auth fallback
 	// for fetching basic tweet metadata.
+	//
+	// Personal note: I mostly use this for archiving tweet videos locally;
+	// the title format below matches my personal naming convention.
 	data := &types.Data{
 		Site:  "Twitter",
 		Title: fmt.Sprintf("tweet_%s", videoID),
@@ -55,6 +58,8 @@ func (e *extractor) Extract(url string, option types.Options) ([]*types.Data, er
 
 // extractTweetID parses the numeric tweet/status ID from a Twitter or X URL.
 // Both twitter.com and x.com domains are supported.
+// The URL is trimmed of whitespace and any trailing query parameters are
+// handled naturally by the regex (which stops at the first non-digit).
 func extractTweetID(url string) (string, error) {
 	url = strings.TrimSpace(url)
 	matches := tweetURLPattern.FindStringSubmatch(url)
