@@ -15,6 +15,8 @@ func TestExtractTrackInfo(t *testing.T) {
 	}{
 		{"https://soundcloud.com/artist-name/track-name", "artist-name", "track-name", false},
 		{"https://soundcloud.com/some-artist/some-track", "some-artist", "some-track", false},
+		// Trailing slash should not break parsing
+		{"https://soundcloud.com/some-artist/some-track/", "some-artist", "some-track", false},
 		{"https://example.com/invalid", "", "", true},
 	}
 
