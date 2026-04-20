@@ -28,6 +28,10 @@ func (e *extractor) Extract(url string, option types.Options) ([]*types.Data, er
 	// Here we return a minimal stub so the extractor is wired up correctly.
 	// NOTE: video.twimg.com URLs require a valid auth token in practice;
 	// this stub is useful for testing the wiring but won't download real media.
+	//
+	// TODO(nicholasgasior): Look into using the syndication API endpoint
+	// (cdn.syndication.twimg.com/tweet-result?id=<id>) as a no-auth fallback
+	// for fetching basic tweet metadata.
 	data := &types.Data{
 		Site:  "Twitter",
 		Title: fmt.Sprintf("tweet_%s", videoID),
