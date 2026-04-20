@@ -27,6 +27,12 @@ func TestExtractShortcode(t *testing.T) {
 			want: "MNO456jkl78",
 		},
 		{
+			// Instagram also uses /stories/ paths for highlights shared as links
+			name: "stories URL",
+			url:  "https://www.instagram.com/stories/highlights/ABC123def45/",
+			wantErr: true,
+		},
+		{
 			name:    "invalid URL",
 			url:     "https://www.instagram.com/username/",
 			wantErr: true,
@@ -71,6 +77,12 @@ func TestNormalizeURL(t *testing.T) {
 		{
 			name: "with query params",
 			url:  "https://www.instagram.com/p/ABC123/?utm_source=ig_web",
+			want: "https://www.instagram.com/p/ABC123/",
+		},
+		{
+			// Strip fragment identifiers too, not just query params
+			name: "with fragment",
+			url:  "https://www.instagram.com/p/ABC123/#comments",
 			want: "https://www.instagram.com/p/ABC123/",
 		},
 	}
