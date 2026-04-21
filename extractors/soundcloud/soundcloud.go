@@ -7,6 +7,8 @@ import (
 	"github.com/nicoxiang/lux/extractors/types"
 )
 
+// trackRegex matches SoundCloud URLs in the format soundcloud.com/artist/track.
+// Note: this does not handle sets/playlists (e.g. soundcloud.com/artist/sets/playlist).
 var trackRegex = regexp.MustCompile(`soundcloud\.com/([\w-]+)/([\w-]+)`)
 
 type extractor struct{}
@@ -22,6 +24,7 @@ func (e *extractor) Extract(url string, opts types.Options) ([]*types.Data, erro
 		return nil, err
 	}
 
+	// Format title as "Artist - Track" for consistency with other extractors.
 	title := fmt.Sprintf("%s - %s", artist, track)
 
 	return []*types.Data{
