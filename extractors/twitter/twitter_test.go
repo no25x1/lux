@@ -21,6 +21,8 @@ func TestExtractTweetID(t *testing.T) {
 		{"https://twitter.com/user/status/", "", true},
 		// Edge case: x.com with query params should also strip them correctly
 		{"https://x.com/user/status/555?ref_src=twsrc", "555", false},
+		// Edge case: numeric-only ID that is very long (snowflake IDs can be large)
+		{"https://twitter.com/user/status/1234567890123456789", "1234567890123456789", false},
 	}
 
 	for _, tc := range cases {
