@@ -48,6 +48,12 @@ func TestExtractShortcode(t *testing.T) {
 			url:  "https://www.instagram.com/p/ABC123def45",
 			want: "ABC123def45",
 		},
+		{
+			// URLs from the desktop share button sometimes include query params
+			name: "post URL with query params",
+			url:  "https://www.instagram.com/p/ABC123def45/?utm_source=ig_web_copy_link",
+			want: "ABC123def45",
+		},
 	}
 
 	for _, tt := range tests {
