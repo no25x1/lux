@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	// Matches Instagram post/reel/tv URLs and extracts the shortcode
-	postPattern = regexp.MustCompile(`instagram\.com/(?:p|reel|tv)/([A-Za-z0-9_-]+)`)
+	// Matches Instagram post/reel/tv URLs and extracts the shortcode.
+	// Also supports /stories/ URLs, e.g. instagram.com/stories/username/12345/
+	postPattern = regexp.MustCompile(`instagram\.com/(?:p|reel|tv|stories/[^/]+)/([A-Za-z0-9_-]+)`)
 )
 
 // Extractor handles Instagram URL extraction.
@@ -51,7 +52,7 @@ func (e *Extractor) Extract(url string, option types.Options) ([]*types.Data, er
 	return []*types.Data{data}, nil
 }
 
-// extractShortcode parses the Instagram shortcode from a post/reel/tv URL.
+// extractShortcode parses the Instagram shortcode from a post/reel/tv/stories URL.
 func extractShortcode(url string) (string, error) {
 	matches := postPattern.FindStringSubmatch(url)
 	if len(matches) < 2 {
