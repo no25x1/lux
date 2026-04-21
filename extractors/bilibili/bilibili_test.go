@@ -24,6 +24,11 @@ func TestBVIDExtraction(t *testing.T) {
 			expected: "BV1GJ411x7h7",
 		},
 		{
+			name:     "bilibili URL with timestamp param",
+			url:      "https://www.bilibili.com/video/BV1xx411c7mD?t=42",
+			expected: "BV1xx411c7mD",
+		},
+		{
 			name:     "no BVID",
 			url:      "https://www.bilibili.com/",
 			expected: "",
