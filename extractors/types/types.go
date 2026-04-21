@@ -48,4 +48,6 @@ type Caption struct {
 	URL  string
 	Ext  string
 	Data string
+	// Language holds the BCP 47 language tag for this caption (e.g. "en", "zh-Hans").
+	Language string
 }
