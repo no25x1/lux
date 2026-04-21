@@ -17,6 +17,8 @@ func TestExtractTrackInfo(t *testing.T) {
 		{"https://soundcloud.com/some-artist/some-track", "some-artist", "some-track", false},
 		// Trailing slash should not break parsing
 		{"https://soundcloud.com/some-artist/some-track/", "some-artist", "some-track", false},
+		// Query strings and fragments should also be handled gracefully
+		{"https://soundcloud.com/some-artist/some-track?ref=clipboard", "some-artist", "some-track", false},
 		{"https://example.com/invalid", "", "", true},
 	}
 
