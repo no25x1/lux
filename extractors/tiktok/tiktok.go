@@ -1,101 +1,122 @@
+// Package tiktok provides an extractor for TikTok videos.
 package tiktok
 
 import (
+	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 
-	"github.com/pkg/errors"
-
-	"github.com/iawia002/lux/extractors"
-	"github.com/iawia002/lux/request"
+	"github.com/iawia002/lux/extractors/types"
+	"github.com/nicholasgasior/nextprev/httpclient"
 )
 
-func init() {
-	extractors.Register("tiktok", New())
+var (
+	// videoIDRegex matches TikTok video IDs from various URL formats.
+	videoIDRegex = regexp.MustCompile(`/video/(\d+)`)
+
+	// shortURLRegex matches vm.tiktok.com short URLs.
+	shortURLRegex = regexp.MustCompile(`https?://(?:vm|vt)\.tiktok\.com/([A-Za-z0-9]+)`)
+)
+
+// Extractor implements the types.Extractor interface for TikTok.
+type Extractor struct {
+	client *httpclient.Client
 }
 
-type extractor struct{}
-
-// New returns a tiktok extractor.
-func New() extractors.Extractor {
-	return &extractor{}
+// New returns a new TikTok extractor.
+func New() *Extractor {
+	return &Extractor{
+		client: httpclient.NewClient(),
+	}
 }
 
-// Extract is the main function to extract the data.
-func (e *extractor) Extract(url string, option extractors.Options) ([]*extractors.Data, error) {
-	html, err := request.Get(url, url, map[string]string{
-		// tiktok require a user agent
-		"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:98.0) Gecko/20100101 Firefox/98.0",
-	})
+// extractVideoID parses the TikTok video ID from a URL string.
+// It handles both full URLs (/@user/video/12345) and short URLs (vm.tiktok.com/abc).
+func extractVideoID(rawURL string) (string, error) {
+	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return "", fmt.Errorf("tiktok: invalid URL %q: %w", rawURL, err)
 	}
 
-	urlMatcherRegExp := regexp.MustCompile(`"downloadAddr":\s*"([^"]+)"`)
+	host := strings.ToLower(parsed.Host)
 
-	downloadURLMatcher := urlMatcherRegExp.FindStringSubmatch(html)
-
-	if len(downloadURLMatcher) == 0 {
-		return nil, errors.WithStack(extractors.ErrURLParseFailed)
-	}
-
-	videoURL := strings.ReplaceAll(downloadURLMatcher[1], `\u002F`, "/")
-
-	titleMatcherRegExp := regexp.MustCompile(`<title[^>]*>([^<]+)</title>`)
-
-	titleMatcherRegExpOpt := regexp.MustCompile(`"desc":"([^"]*)"`)
-
-	titleMatcher := titleMatcherRegExp.FindStringSubmatch(html)
-
-	titleMatcherOpt := titleMatcherRegExpOpt.FindStringSubmatch(html)
-
-	if len(titleMatcher) == 0 {
-		return nil, errors.WithStack(extractors.ErrURLParseFailed)
-	}
-
-	title := titleMatcher[1]
-
-	if title == "TikTok - Make Your Day" {
-		if len(titleMatcherOpt[1]) > 64 {
-			cutoff := titleMatcherOpt[1][:64]
-			lastSpace := strings.LastIndex(cutoff, " ")
-			title = titleMatcherOpt[1][:lastSpace]
-		} else {
-			title = titleMatcherOpt[1]
+	// Handle short URLs — they redirect to the full URL; we extract the slug.
+	if strings.Contains(host, "vm.tiktok.com") || strings.Contains(host, "vt.tiktok.com") {
+		matches := shortURLRegex.FindStringSubmatch(rawURL)
+		if len(matches) < 2 {
+			return "", fmt.Errorf("tiktok: cannot extract short code from URL %q", rawURL)
 		}
+		// Return the short code; callers may need to resolve the redirect.
+		return matches[1], nil
 	}
 
-	titleArr := strings.Split(title, "|")
-
-	if len(titleArr) == 1 {
-		title = titleArr[0]
-	} else {
-		title = strings.TrimSpace(strings.Join(titleArr[:len(titleArr)-1], "|"))
+	// Handle full TikTok URLs: https://www.tiktok.com/@user/video/1234567890
+	matches := videoIDRegex.FindStringSubmatch(parsed.Path)
+	if len(matches) < 2 {
+		return "", fmt.Errorf("tiktok: cannot extract video ID from URL %q", rawURL)
 	}
+	return matches[1], nil
+}
 
-	streams := make(map[string]*extractors.Stream)
-
-	size, err := request.Size(videoURL, url)
+// Extract fetches metadata and stream information for the given TikTok URL.
+func (e *Extractor) Extract(rawURL string, option types.Options) ([]*types.Data, error) {
+	videoID, err := extractVideoID(rawURL)
 	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-	urlData := &extractors.Part{
-		URL:  videoURL,
-		Size: size,
-		Ext:  "mp4",
-	}
-	streams["default"] = &extractors.Stream{
-		Parts: []*extractors.Part{urlData},
-		Size:  size,
+		return nil, err
 	}
 
-	return []*extractors.Data{
+	// TikTok's private API endpoint used by the mobile app.
+	apiURL := fmt.Sprintf(
+		"https://api.tiktok.com/aweme/v1/feed/?aweme_id=%s&version_code=262&app_name=tiktok_web",
+		videoID,
+	)
+
+	var apiResp struct {
+		AwemeList []struct {
+			Desc  string `json:"desc"`
+			Video struct {
+				PlayAddr struct {
+					URLList []string `json:"url_list"`
+				} `json:"play_addr"`
+				Width  int `json:"width"`
+				Height int `json:"height"`
+			} `json:"video"`
+		} `json:"aweme_list"`
+	} `json:"-"`
+
+	if err := e.client.GetJSON(apiURL, &apiResp); err != nil {
+		return nil, fmt.Errorf("tiktok: API request failed for video %s: %w", videoID, err)
+	}
+
+	if len(apiResp.AwemeList) == 0 {
+		return nil, fmt.Errorf("tiktok: no video data returned for ID %s", videoID)
+	}
+
+	item := apiResp.AwemeList[0]
+	if len(item.Video.PlayAddr.URLList) == 0 {
+		return nil, fmt.Errorf("tiktok: no playable streams found for video %s", videoID)
+	}
+
+	streams := map[string]*types.Stream{
+		"default": {
+			URLs: []*types.Part{
+				{
+					URL:  item.Video.PlayAddr.URLList[0],
+					Ext:  "mp4",
+				},
+			},
+			Quality: fmt.Sprintf("%dx%d", item.Video.Width, item.Video.Height),
+		},
+	}
+
+	return []*types.Data{
 		{
-			Site:    "TikTok tiktok.com",
-			Title:   title,
-			Type:    extractors.DataTypeVideo,
+			Site:    "TikTok",
+			Title:   item.Desc,
+			Type:    "video",
 			Streams: streams,
-			URL:     url,
+			URL:     rawURL,
 		},
 	}, nil
 }
