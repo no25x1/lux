@@ -19,6 +19,8 @@ func TestExtractTweetID(t *testing.T) {
 		{"", "", true},
 		// Edge case: URL with trailing slash should still fail gracefully
 		{"https://twitter.com/user/status/", "", true},
+		// Edge case: x.com with query params should also strip them correctly
+		{"https://x.com/user/status/555?ref_src=twsrc", "555", false},
 	}
 
 	for _, tc := range cases {
@@ -57,6 +59,10 @@ func TestExtract(t *testing.T) {
 	}
 	if data[0].Site != "Twitter" {
 		t.Errorf("Site = %q, want \"Twitter\"", data[0].Site)
+	}
+	// Also verify Title is non-empty so we know metadata was populated
+	if data[0].Title == "" {
+		t.Error("expected non-empty Title in extracted data")
 	}
 	if _, ok := data[0].Streams["default"]; !ok {
 		t.Error("expected 'default' stream to be present")
