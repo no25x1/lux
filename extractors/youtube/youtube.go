@@ -77,6 +77,8 @@ func extractTitle(html string) string {
 		return "Unknown Title"
 	}
 	title := html[start+7 : end]
+	// YouTube appends " - YouTube" to page titles; strip both variants
 	title = strings.TrimSuffix(title, " - YouTube")
+	title = strings.TrimSuffix(title, " – YouTube") // en-dash variant
 	return strings.TrimSpace(title)
 }
