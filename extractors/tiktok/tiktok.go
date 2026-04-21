@@ -15,7 +15,7 @@ var (
 	// videoIDRegex matches TikTok video IDs from various URL formats.
 	videoIDRegex = regexp.MustCompile(`/video/(\d+)`)
 
-	// shortURLRegex matches vm.tiktok.com short URLs.
+	// shortURLRegex matches vm.tiktok.com and vt.tiktok.com short URLs.
 	shortURLRegex = regexp.MustCompile(`https?://(?:vm|vt)\.tiktok\.com/([A-Za-z0-9]+)`)
 )
 
@@ -33,6 +33,7 @@ func New() *Extractor {
 
 // extractVideoID parses the TikTok video ID from a URL string.
 // It handles both full URLs (/@user/video/12345) and short URLs (vm.tiktok.com/abc).
+// Note: short URL slugs still need redirect resolution before hitting the API.
 func extractVideoID(rawURL string) (string, error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
@@ -67,6 +68,7 @@ func (e *Extractor) Extract(rawURL string, option types.Options) ([]*types.Data,
 	}
 
 	// TikTok's private API endpoint used by the mobile app.
+	// Using version_code=262 — bump this if the API starts returning empty results.
 	apiURL := fmt.Sprintf(
 		"https://api.tiktok.com/aweme/v1/feed/?aweme_id=%s&version_code=262&app_name=tiktok_web",
 		videoID,
@@ -83,7 +85,7 @@ func (e *Extractor) Extract(rawURL string, option types.Options) ([]*types.Data,
 				Height int `json:"height"`
 			} `json:"video"`
 		} `json:"aweme_list"`
-	} `json:"-"`
+	}
 
 	if err := e.client.GetJSON(apiURL, &apiResp); err != nil {
 		return nil, fmt.Errorf("tiktok: API request failed for video %s: %w", videoID, err)
@@ -99,24 +101,4 @@ func (e *Extractor) Extract(rawURL string, option types.Options) ([]*types.Data,
 	}
 
 	streams := map[string]*types.Stream{
-		"default": {
-			URLs: []*types.Part{
-				{
-					URL:  item.Video.PlayAddr.URLList[0],
-					Ext:  "mp4",
-				},
-			},
-			Quality: fmt.Sprintf("%dx%d", item.Video.Width, item.Video.Height),
-		},
-	}
-
-	return []*types.Data{
-		{
-			Site:    "TikTok",
-			Title:   item.Desc,
-			Type:    "video",
-			Streams: streams,
-			URL:     rawURL,
-		},
-	}, nil
-}
+		"default": 
