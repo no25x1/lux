@@ -28,6 +28,12 @@ func TestExtractVideoID(t *testing.T) {
 			want: "112233445",
 		},
 		{
+			// groups urls follow the same pattern: /groups/foo/videos/123
+			name: "groups url",
+			url:  "https://vimeo.com/groups/motion/videos/556677889",
+			want: "556677889",
+		},
+		{
 			name:    "invalid url",
 			url:     "https://example.com/watch?v=abc",
 			wantErr: true,
