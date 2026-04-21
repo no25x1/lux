@@ -42,6 +42,12 @@ func TestExtractShortcode(t *testing.T) {
 			url:     "",
 			wantErr: true,
 		},
+		{
+			// Mobile share links sometimes use this format
+			name: "post URL without trailing slash",
+			url:  "https://www.instagram.com/p/ABC123def45",
+			want: "ABC123def45",
+		},
 	}
 
 	for _, tt := range tests {
@@ -83,6 +89,12 @@ func TestNormalizeURL(t *testing.T) {
 			// Strip fragment identifiers too, not just query params
 			name: "with fragment",
 			url:  "https://www.instagram.com/p/ABC123/#comments",
+			want: "https://www.instagram.com/p/ABC123/",
+		},
+		{
+			// URLs copied from the app often include both query params and fragments
+			name: "with query params and fragment",
+			url:  "https://www.instagram.com/p/ABC123/?utm_source=ig_web#comments",
 			want: "https://www.instagram.com/p/ABC123/",
 		},
 	}
