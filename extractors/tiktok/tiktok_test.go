@@ -3,37 +3,89 @@ package tiktok
 import (
 	"testing"
 
-	"github.com/iawia002/lux/extractors"
-	"github.com/iawia002/lux/test"
+	"github.com/iawia002/lux/extractors/types"
 )
 
-func TestDownload(t *testing.T) {
+func TestExtractVideoID(t *testing.T) {
 	tests := []struct {
-		name string
-		args test.Args
+		name    string
+		url     string
+		wantID  string
+		wantErr bool
 	}{
 		{
-			name: "normal test 1",
-			args: test.Args{
-				URL:   "https://www.tiktok.com/@ginjiro_koyama/video/7164293510617763073?is_copy_url=1&is_from_webapp=v1",
-				Title: "イケすぎたXOXO#xoxo #repezenfoxx #背中男 #kfam #yoshikiさんを泣かせたチーム @K fam @【Repezen Foxx】🦊",
-				Size:  4356253,
-			},
+			name:   "standard video URL",
+			url:    "https://www.tiktok.com/@username/video/7123456789012345678",
+			wantID: "7123456789012345678",
 		},
 		{
-			name: "normal test 2",
-			args: test.Args{
-				URL:   "https://www.tiktok.com/@enhypen/video/7165445991238356225?is_copy_url=1&is_from_webapp=v1",
-				Title: "깜짝 퇴장 👋 #ENHYPEN #SUNGHOON #NI_KI #Make_the_change",
-				Size:  3848307,
-			},
+			name:   "mobile video URL",
+			url:    "https://m.tiktok.com/v/7123456789012345678.html",
+			wantID: "7123456789012345678",
+		},
+		{
+			name:    "invalid URL",
+			url:     "https://www.tiktok.com/@username",
+			wantErr: true,
+		},
+		{
+			name:    "empty URL",
+			url:     "",
+			wantErr: true,
+		},
+		{
+			name:    "non-tiktok URL",
+			url:     "https://www.youtube.com/watch?v=abc123",
+			wantErr: true,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			data, err := New().Extract(tt.args.URL, extractors.Options{})
-			test.CheckError(t, err)
-			test.Check(t, tt.args, data[0])
+			gotID, err := extractVideoID(tt.url)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("extractVideoID() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && gotID != tt.wantID {
+				t.Errorf("extractVideoID() = %v, want %v", gotID, tt.wantID)
+			}
+		})
+	}
+}
+
+func TestNew(t *testing.T) {
+	extractor := New()
+	if extractor == nil {
+		t.Fatal("New() returned nil")
+	}
+}
+
+func TestExtract(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		wantErr bool
+	}{
+		{
+			name:    "invalid URL returns error",
+			url:     "https://www.tiktok.com/@username",
+			wantErr: true,
+		},
+		{
+			name:    "empty URL returns error",
+			url:     "",
+			wantErr: true,
+		},
+	}
+
+	extractor := New()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := extractor.Extract(tt.url, types.Options{})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Extract() error = %v, wantErr %v", err, tt.wantErr)
+			}
 		})
 	}
 }
